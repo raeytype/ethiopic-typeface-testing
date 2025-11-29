@@ -10,6 +10,7 @@ use strict;
 sub getChar {
 $_ = shift;
 
+	s/u1E7/uni1E7/;
 	s/hhyaethiopic/uni1E7E0/;
 	s/hhyuethiopic/uni1E7E1/;
 	s/hhyiethiopic/uni1E7E2/;
@@ -59,6 +60,9 @@ sub getID
 my($base) = @_;
 
 		if( $base =~ /^uni(\w{4})$/ ) {
+			$base = getChar($base);
+		}
+		elsif( $base =~ /^uni1E7\w{2}$/ || /^u1E7\w{2}$/) {
 			$base = getChar($base);
 		}
 		elsif( $base =~ m/^(uni\w{4})(.*?)$/ ) {
@@ -148,7 +152,14 @@ print "feature kern {\n";
 			$array .= $i;
 		}
 		$array .= "]";
-		print sprintf( "@". "_uni%04X = $array;\n", ord($key) );
+		if( length($key) == 1 ) {
+			print sprintf( "@". "_uni%04X = $array;\n", ord($key) );
+		}
+		else {
+			$key =~ s/^(\w)(.*?)$/$1/;
+			my $suffix = $2;	
+			print sprintf( "@". "_uni%04X_$suffix = $array;\n", ord($key) );
+		}
 	}
 
 print "\n  lookup kern_ethi {\n\n    lookupflag IgnoreMarks;\n";
@@ -157,19 +168,52 @@ print "\n  lookup kern_ethi {\n\n    lookupflag IgnoreMarks;\n";
 	for my $key (sort keys %ArrayScalar) {
 		my $v = $ArrayScalar{$key};
 		my($l,$r) = split( / /, $key );
-		print sprintf( "    pos @". "_uni%04X uni%04X $v;\n", ord($l), ord($r) );
+		if( length($l) == 1 ) {
+			print sprintf( "    pos @". "_uni%04X uni%04X $v;\n", ord($l), ord($r) );
+		}
+		else {
+			$l =~ s/^(\w)(.*?)$/$1/;
+			my $suffix = $2;	
+			print sprintf( "    pos @". "_uni%04X_$suffix uni%04X $v;\n", ord($l), ord($r) );
+		}
 	}
 
 	for my $key (sort keys %ScalarArray) {
 		my $v = $ScalarArray{$key};
 		my($l,$r) = split( / /, $key );
-		print sprintf( "    pos uni%04X @"."_uni%04X $v;\n", ord($l), ord($r) );
+		if( length($r) == 1 ) {
+			print sprintf( "    pos uni%04X @"."_uni%04X $v;\n", ord($l), ord($r) );
+		}
+		else {
+			$r =~ s/^(\w)(.*?)$/$1/;
+			my $suffix = $2;	
+			print sprintf( "    pos uni%04X @"."_uni%04X_$suffix $v;\n", ord($l), ord($r) );
+		}
 	}
 
 	for my $key (sort keys %ArrayArray) {
 		my $v = $ArrayArray{$key};
 		my($l,$r) = split( / /, $key );
-		print sprintf( "    pos @". "_uni%04X @"."_uni%04X $v;\n", ord($l), ord($r) );
+		if( (length($l) == 1) && (length($r) == 1) ) { # no suffixes
+			print sprintf( "    pos @". "_uni%04X @"."_uni%04X $v;\n", ord($l), ord($r) );
+		}
+		elsif( (length($l) == 1) ) {  # $r has a suffix
+			$r =~ s/^(\w)(.*?)$/$1/;
+			my $suffix = $2;	
+			print sprintf( "    pos @". "_uni%04X @"."_uni%04X_$suffix $v;\n", ord($l), ord($r) );
+		}
+		elsif( (length($r) == 1) ) {  # $l has a suffix
+			$l =~ s/^(\w)(.*?)$/$1/;
+			my $suffix = $2;	
+			print sprintf( "    pos @". "_uni%04X_$suffix @"."_uni%04X $v;\n", ord($l), ord($r) );
+		}
+		else { # $l & $r both have suffixes
+			$l =~ s/^(\w)(.*?)$/$1/;
+			my $suffixL= $2;	
+			$r =~ s/^(\w)(.*?)$/$1/;
+			my $suffixR = $2;	
+			print sprintf( "    pos @". "_uni%04X_$suffixL @"."_uni%04X_$suffixR $v;\n", ord($l), ord($r) );
+		}
 	}
 
 	for my $key (sort keys %ScalarScalar) {
@@ -180,7 +224,6 @@ print "\n  lookup kern_ethi {\n\n    lookupflag IgnoreMarks;\n";
 
 print<<END_KERN;
   } kern_ethi;
-
 
   script ethi; # Ethiopic
   lookup kern_ethi;
