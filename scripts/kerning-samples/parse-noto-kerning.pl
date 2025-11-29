@@ -61,19 +61,13 @@ my($base) = @_;
 		if( $base =~ /^uni(\w{4})$/ ) {
 			$base = getChar($base);
 		}
-		elsif( $base =~ m/^(uni\w{4})(\w)$/ ) {
+		elsif( $base =~ m/^(uni\w{4})(.*?)$/ ) {
 			my $uchar  = $1;
 			my $suffix = $2;
-print "SUFFIX: $suffix\n";
 			$base = sprintf( "%s$suffix", getChar( $uchar ) );
 		}
-		else {
-# print "BASE: $base\n";
-			# $base =~ m/^(\w+)\.(\w+)$/ ;
-			# my $uchar = "uni$1";
-			# my $suffix = $2;
-# print "SUFFIX: $suffix\n";
-			# $base = sprintf( "%s$suffix", getChar( $base ) );
+		else { # For names like: hhyaethiopic
+# print "getID: HERE: $base\n";
 			$base = getChar($base);
 		}
 	$base;
@@ -84,8 +78,14 @@ main:
 {
 my $kernFea = 0;
 
+my %Classes = ();
+my %ScalarScalar = ();
+my %ScalarArray  = ();
+my %ArrayScalar  = ();
+my %ArrayArray   = ();
+
 while( <> ) {
-	if( /kern;/ ) {
+	if( /kern;/ || /PairKerning;/ ) {
 		$kernFea = 0 ;
 	}
 	elsif( $kernFea ) {
@@ -105,29 +105,86 @@ while( <> ) {
 				my $uchar = getID( $char );
 				$conv .= "$uchar ";
 			}
+			$Classes{$base} = $conv;
 			print "# @"."_$base = [ $conv];\n";
 		}
     		elsif( /pos \@_(uni.*?) (uni.*?) (.*?);/ ) {
 			my ($l, $r, $v) = ( getID($1), getID($2), $3 );
+			$ArrayScalar{"$l $r"} = $v;
 			print "# pos @" ."_$l $r $v;\n";
 		}
     		elsif( /pos (uni.*?) \@_(uni.*?) (.*?);/ ) {
 			my ($l, $r, $v) = ( getID($1), getID($2), $3 );
+			$ScalarArray{"$l $r"} = $v;
 			print "# pos $l @" . "_$r $v;\n";
 		}
     		elsif( /pos \@_(uni.*?) \@_(uni.*?) (.*?);/ ) {
 			my ($l, $r, $v) = ( getID($1), getID($2), $3 );
+			$ArrayArray{"$l $r"} = $v;
 			print "# pos @" ."_$l @" . "_$r $v;\n";
 		}
 		elsif( /pos (.*?) (.*?) (.*?);/) {
 			my ($l, $r, $v) = ( getID($1), getID($2), $3 );
+			$ScalarScalar{"$l $r"} = $v;
 			print "# pos $l $r $v;\n";
 		}
 		print $line;
 	}
-	elsif( /feature kern {/ ) {
+	elsif( /feature kern {/ || /PairKerning/ ) { # PairKerning from Abyssinica)
 		$kernFea = 1 ;
 	}
 }
+
+print "=======================\n";
+
+
+print "feature kern {\n";
+
+	for my $key (sort keys %Classes) {
+		my @list = split( / /, $Classes{$key} );
+		my $array = "[ ";
+		for my $item (sort @list) {
+			my $i = sprintf( "uni%04X ", ord($item) );
+			$array .= $i;
+		}
+		$array .= "]";
+		print sprintf( "@". "_uni%04X = $array;\n", ord($key) );
+	}
+
+print "\n  lookup kern_ethi {\n\n    lookupflag IgnoreMarks;\n";
+    
+
+	for my $key (sort keys %ArrayScalar) {
+		my $v = $ArrayScalar{$key};
+		my($l,$r) = split( / /, $key );
+		print sprintf( "    pos @". "_uni%04X uni%04X $v;\n", ord($l), ord($r) );
+	}
+
+	for my $key (sort keys %ScalarArray) {
+		my $v = $ScalarArray{$key};
+		my($l,$r) = split( / /, $key );
+		print sprintf( "    pos uni%04X @"."_uni%04X $v;\n", ord($l), ord($r) );
+	}
+
+	for my $key (sort keys %ArrayArray) {
+		my $v = $ArrayArray{$key};
+		my($l,$r) = split( / /, $key );
+		print sprintf( "    pos @". "_uni%04X @"."_uni%04X $v;\n", ord($l), ord($r) );
+	}
+
+	for my $key (sort keys %ScalarScalar) {
+		my $v = $ScalarScalar{$key};
+		my($l,$r) = split( / /, $key );
+		print sprintf( "    pos uni%04X uni%04X $v;\n", ord($l), ord($r) );
+	}
+
+print<<END_KERN;
+  } kern_ethi;
+
+
+  script ethi; # Ethiopic
+  lookup kern_ethi;
+} kern;
+END_KERN
 
 }
