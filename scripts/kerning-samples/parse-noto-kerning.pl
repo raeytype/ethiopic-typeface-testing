@@ -1,4 +1,3 @@
-
 #!/usr/bin/perl -w
 
 binmode(STDIN, ":utf8");
@@ -78,68 +77,15 @@ my($base) = @_;
 
 }
 
-main:
-{
-my $kernFea = 0;
-
 my %Classes = ();
 my %ScalarScalar = ();
 my %ScalarArray  = ();
 my %ArrayScalar  = ();
 my %ArrayArray   = ();
 
-while( <> ) {
-	if( /kern;/ || /PairKerning;/ ) {
-		$kernFea = 0 ;
-	}
-	elsif( $kernFea ) {
-		next unless( /^@/ || /^\s+pos/ );
-		my $line = $_ ;
-		#
-		# classes
-		#
-		if( /^\@_(uni.*?) =/ ) {
-			my $base = getID( $1 );
 
-			$line =~ m/\[(.*?)\]/;
-			my @list = split( / /, $1 );
-			# @_uni1230 = [uni1230 uni1233 uni1235 uni12A8 uni12AB uni12AD uni12B8 uni12BB uni12BD uni130E uni130F uni2DD8 uni2DDB uni2DDD uniAB03 uniAB05];
-			my $conv = "";
-			for my $char (@list) {
-				my $uchar = getID( $char );
-				$conv .= "$uchar ";
-			}
-			$Classes{$base} = $conv;
-			print "# @"."_$base = [ $conv];\n";
-		}
-    		elsif( /pos \@_(uni.*?) (uni.*?) (.*?);/ ) {
-			my ($l, $r, $v) = ( getID($1), getID($2), $3 );
-			$ArrayScalar{"$l $r"} = $v;
-			print "# pos @" ."_$l $r $v;\n";
-		}
-    		elsif( /pos (uni.*?) \@_(uni.*?) (.*?);/ ) {
-			my ($l, $r, $v) = ( getID($1), getID($2), $3 );
-			$ScalarArray{"$l $r"} = $v;
-			print "# pos $l @" . "_$r $v;\n";
-		}
-    		elsif( /pos \@_(uni.*?) \@_(uni.*?) (.*?);/ ) {
-			my ($l, $r, $v) = ( getID($1), getID($2), $3 );
-			$ArrayArray{"$l $r"} = $v;
-			print "# pos @" ."_$l @" . "_$r $v;\n";
-		}
-		elsif( /pos (.*?) (.*?) (.*?);/) {
-			my ($l, $r, $v) = ( getID($1), getID($2), $3 );
-			$ScalarScalar{"$l $r"} = $v;
-			print "# pos $l $r $v;\n";
-		}
-		print $line;
-	}
-	elsif( /feature kern {/ || /PairKerning/ ) { # PairKerning from Abyssinica)
-		$kernFea = 1 ;
-	}
-}
-
-print "=======================\n";
+sub exportFEA()
+{
 
 
 print "feature kern {\n";
@@ -153,12 +99,13 @@ print "feature kern {\n";
 		}
 		$array .= "]";
 		if( length($key) == 1 ) {
-			print sprintf( "@". "_uni%04X = $array;\n", ord($key) );
+			printf( "@". "_uni%04X = $array;\n", ord($key) );
 		}
 		else {
 			$key =~ s/^(\w)(.*?)$/$1/;
 			my $suffix = $2;	
-			print sprintf( "@". "_uni%04X_$suffix = $array;\n", ord($key) );
+			$suffix =~ s/^\.//;
+			printf( "@". "_uni%04X_$suffix = $array;\n", ord($key) );
 		}
 	}
 
@@ -169,12 +116,13 @@ print "\n  lookup kern_ethi {\n\n    lookupflag IgnoreMarks;\n";
 		my $v = $ArrayScalar{$key};
 		my($l,$r) = split( / /, $key );
 		if( length($l) == 1 ) {
-			print sprintf( "    pos @". "_uni%04X uni%04X $v;\n", ord($l), ord($r) );
+			printf( "    pos @". "_uni%04X uni%04X $v;\n", ord($l), ord($r) );
 		}
 		else {
 			$l =~ s/^(\w)(.*?)$/$1/;
 			my $suffix = $2;	
-			print sprintf( "    pos @". "_uni%04X_$suffix uni%04X $v;\n", ord($l), ord($r) );
+			$suffix =~ s/^\.//;
+			printf( "    pos @". "_uni%04X_$suffix uni%04X $v;\n", ord($l), ord($r) );
 		}
 	}
 
@@ -182,12 +130,13 @@ print "\n  lookup kern_ethi {\n\n    lookupflag IgnoreMarks;\n";
 		my $v = $ScalarArray{$key};
 		my($l,$r) = split( / /, $key );
 		if( length($r) == 1 ) {
-			print sprintf( "    pos uni%04X @"."_uni%04X $v;\n", ord($l), ord($r) );
+			printf( "    pos uni%04X @"."_uni%04X $v;\n", ord($l), ord($r) );
 		}
 		else {
 			$r =~ s/^(\w)(.*?)$/$1/;
 			my $suffix = $2;	
-			print sprintf( "    pos uni%04X @"."_uni%04X_$suffix $v;\n", ord($l), ord($r) );
+			$suffix =~ s/^\.//;
+			printf( "    pos uni%04X @"."_uni%04X_$suffix $v;\n", ord($l), ord($r) );
 		}
 	}
 
@@ -195,31 +144,35 @@ print "\n  lookup kern_ethi {\n\n    lookupflag IgnoreMarks;\n";
 		my $v = $ArrayArray{$key};
 		my($l,$r) = split( / /, $key );
 		if( (length($l) == 1) && (length($r) == 1) ) { # no suffixes
-			print sprintf( "    pos @". "_uni%04X @"."_uni%04X $v;\n", ord($l), ord($r) );
+			printf( "    pos @". "_uni%04X @"."_uni%04X $v;\n", ord($l), ord($r) );
 		}
 		elsif( (length($l) == 1) ) {  # $r has a suffix
 			$r =~ s/^(\w)(.*?)$/$1/;
 			my $suffix = $2;	
-			print sprintf( "    pos @". "_uni%04X @"."_uni%04X_$suffix $v;\n", ord($l), ord($r) );
+			$suffix =~ s/^\.//;
+			printf( "    pos @". "_uni%04X @"."_uni%04X_$suffix $v;\n", ord($l), ord($r) );
 		}
 		elsif( (length($r) == 1) ) {  # $l has a suffix
 			$l =~ s/^(\w)(.*?)$/$1/;
 			my $suffix = $2;	
-			print sprintf( "    pos @". "_uni%04X_$suffix @"."_uni%04X $v;\n", ord($l), ord($r) );
+			$suffix =~ s/^\.//;
+			printf( "    pos @". "_uni%04X_$suffix @"."_uni%04X $v;\n", ord($l), ord($r) );
 		}
 		else { # $l & $r both have suffixes
 			$l =~ s/^(\w)(.*?)$/$1/;
 			my $suffixL= $2;	
+			$suffixL =~ s/^\.//;
 			$r =~ s/^(\w)(.*?)$/$1/;
 			my $suffixR = $2;	
-			print sprintf( "    pos @". "_uni%04X_$suffixL @"."_uni%04X_$suffixR $v;\n", ord($l), ord($r) );
+			$suffixR =~ s/^\.//;
+			printf( "    pos @". "_uni%04X_$suffixL @"."_uni%04X_$suffixR $v;\n", ord($l), ord($r) );
 		}
 	}
 
 	for my $key (sort keys %ScalarScalar) {
 		my $v = $ScalarScalar{$key};
 		my($l,$r) = split( / /, $key );
-		print sprintf( "    pos uni%04X uni%04X $v;\n", ord($l), ord($r) );
+		printf( "    pos uni%04X uni%04X $v;\n", ord($l), ord($r) );
 	}
 
 print<<END_KERN;
@@ -229,5 +182,234 @@ print<<END_KERN;
   lookup kern_ethi;
 } kern;
 END_KERN
+
+}
+
+
+sub exportJSON()
+{
+
+
+print "{\n";
+
+	print "\t\"classes\": [\n"; 
+	my $size = keys %Classes; 
+	my $i = 0;
+	for my $key (sort keys %Classes) {
+		print "\t\t{\n";
+
+		if( length($key) == 1 ) {
+			printf( "\t\t\t\"@". "_uni%04X\":\t", ord($key) );
+		}
+		else {
+			my $skey = $key;
+			$skey =~ s/^(\w)(.*?)$/$1/;
+			my $suffix = $2;	
+			$suffix =~ s/^\.//;
+			printf( "\t\t\t\"@". "_uni%04X_$suffix\":\t", ord($key) );
+		}
+
+		my @list = split( / /, $Classes{$key} );
+		my $array = "[ ";
+		for my $item (sort @list) {
+			my $i = sprintf( "\"uni%04X\", ", ord($item) );
+			$array .= $i;
+		}
+		$array =~ s/", $/" /;
+		$array .= "]";
+		print "$array\n";
+		$i++;
+		if( $i < $size ) {	
+			print "\t\t},\n";
+		}
+		else {
+			print "\t\t}\n";
+		}
+	}
+	print "\t],\n";
+
+	print "\t\"pos\": [\n";
+
+	# print as list of triples:
+
+	$size = keys %ArrayScalar; 
+	$i = 0;
+	for my $key (sort keys %ArrayScalar) {
+		my $v = $ArrayScalar{$key};
+		my($l,$r) = split( / /, $key );
+		if( length($l) == 1 ) {
+			printf( "\t\t[ \"\@_uni%04X\", \"uni%04X\", $v ]", ord($l), ord($r) );
+		}
+		else {
+			$l =~ s/^(\w)(.*?)$/$1/;
+			my $suffix = $2;	
+			$suffix =~ s/^\.//;
+			printf( "\t\t[ \"\@_uni%04X_$suffix\", \"uni%04X\", $v ]", ord($l), ord($r) );
+		}
+
+		$i++;
+		if( $i < $size ) {	
+			print ",\n";
+		}
+		else {
+			print "\n";
+		}
+	}
+	print "\t],\n";
+
+	$size = keys %ScalarArray; 
+	$i = 0;
+	for my $key (sort keys %ScalarArray) {
+		my $v = $ScalarArray{$key};
+		my($l,$r) = split( / /, $key );
+		if( length($r) == 1 ) {
+			printf( "\t\t[ \"uni%04X\", \"\@_uni%04X\", $v ]", ord($l), ord($r) );
+		}
+		else {
+			$r =~ s/^(\w)(.*?)$/$1/;
+			my $suffix = $2;	
+			$suffix =~ s/^\.//;
+			printf( "\t\t[ \"uni%04X\", \"\@_uni%04X_$suffix\", $v ]", ord($l), ord($r) );
+		}
+		$i++;
+		if( $i < $size ) {	
+			print ",\n";
+		}
+		else {
+			print "\n";
+		}
+	}
+	print "\t],\n";
+
+
+	$size = keys %ArrayArray; 
+	$i = 0;
+	for my $key (sort keys %ArrayArray) {
+		my $v = $ArrayArray{$key};
+		my($l,$r) = split( / /, $key );
+		if( (length($l) == 1) && (length($r) == 1) ) { # no suffixes
+			printf( "\t\t[ \"\@\"_uni%04X\", \"\@_uni%04X\", $v ]", ord($l), ord($r) );
+		}
+		elsif( (length($l) == 1) ) {  # $r has a suffix
+			$r =~ s/^(\w)(.*?)$/$1/;
+			my $suffix = $2;	
+			$suffix =~ s/^\.//;
+			printf( "\t\t[ \"\@_uni%04X\", \"\@_uni%04X_$suffix\", $v ]", ord($l), ord($r) );
+		}
+		elsif( (length($r) == 1) ) {  # $l has a suffix
+			$l =~ s/^(\w)(.*?)$/$1/;
+			my $suffix = $2;	
+			$suffix =~ s/^\.//;
+			printf( "\t\t[ \"\@_uni%04X_$suffix\", \"\@_uni%04X\", $v ]", ord($l), ord($r) );
+		}
+		else { # $l & $r both have suffixes
+			$l =~ s/^(\w)(.*?)$/$1/;
+			my $suffixL= $2;	
+			$suffixL =~ s/^\.//;
+			$r =~ s/^(\w)(.*?)$/$1/;
+			my $suffixR = $2;	
+			$suffixR =~ s/^\.//;
+			printf( "\t\t[ \"\@_uni%04X_$suffixL\", \"\@_uni%04X_$suffixR\", $v ]", ord($l), ord($r) );
+		}
+		$i++;
+		if( $i < $size ) {	
+			print ",\n";
+		}
+		else {
+			print "\n";
+		}
+	}
+	print "\t],\n";
+
+
+	$size = keys %ScalarScalar; 
+	$i = 0;
+	for my $key (sort keys %ScalarScalar) {
+		my $v = $ScalarScalar{$key};
+		my($l,$r) = split( / /, $key );
+		printf( "\t\t[ \"uni%04X\", \"uni%04X\", $v ]", ord($l), ord($r) );
+		$i++;
+		if( $i < $size ) {	
+			print ",\n";
+		}
+		else {
+			print "\n";
+		}
+	}
+	print "\t]\n";
+
+print "}\n";
+
+}
+
+
+sub readFEA()
+{
+
+# Read data from stdin:
+
+my $kernFea = 0;
+
+	while( <> ) {
+		if( /kern;/ || /PairKerning;/ ) {  # PairKerning from Abyssinica
+			$kernFea = 0 ;
+		}
+		elsif( $kernFea ) {
+			next unless( /^@/ || /^\s+pos/ );
+			my $line = $_ ;
+			#
+			# classes
+			#
+			if( /^\@_(uni.*?) =/ ) {
+				my $base = getID( $1 );
+	
+				$line =~ m/\[(.*?)\]/;
+				my @list = split( / /, $1 );
+				# @_uni1230 = [uni1230 uni1233 uni1235 uni12A8 uni12AB uni12AD uni12B8 uni12BB uni12BD uni130E uni130F uni2DD8 uni2DDB uni2DDD uniAB03 uniAB05];
+				my $conv = "";
+				for my $char (@list) {
+					my $uchar = getID( $char );
+					$conv .= "$uchar ";
+				}
+				$Classes{$base} = $conv;
+				print "# @"."_$base = [ $conv];\n";
+			}
+    			elsif( /pos \@_(uni.*?) (uni.*?) (.*?);/ ) {
+				my ($l, $r, $v) = ( getID($1), getID($2), $3 );
+				$ArrayScalar{"$l $r"} = $v;
+				print "# pos @" ."_$l $r $v;\n";
+			}
+    			elsif( /pos (uni.*?) \@_(uni.*?) (.*?);/ ) {
+				my ($l, $r, $v) = ( getID($1), getID($2), $3 );
+				$ScalarArray{"$l $r"} = $v;
+				print "# pos $l @" . "_$r $v;\n";
+			}
+    			elsif( /pos \@_(uni.*?) \@_(uni.*?) (.*?);/ ) {
+				my ($l, $r, $v) = ( getID($1), getID($2), $3 );
+				$ArrayArray{"$l $r"} = $v;
+				print "# pos @" ."_$l @" . "_$r $v;\n";
+			}
+			elsif( /pos (.*?) (.*?) (.*?);/) {
+				my ($l, $r, $v) = ( getID($1), getID($2), $3 );
+				$ScalarScalar{"$l $r"} = $v;
+				print "# pos $l $r $v;\n";
+			}
+			print $line;
+		}
+		elsif( /feature kern \{/ || /PairKerning/ ) {
+			$kernFea = 1 ;
+		}
+	}
+
+}
+
+
+main:
+{
+
+	readFEA();
+	exportFEA();
+	exportJSON();
+
 
 }
